@@ -1,0 +1,339 @@
+apiVersion: v1
+kind: Template
+parameters:
+  - name: SOURCE_REPOSITORY_URL
+    description: The source URL for the application
+    displayName: Source URL
+    value: 'https://github.com/dummy_org/dummy_repo'
+    required: true
+  - name: GITHUB_WEBHOOK_SECRET
+    description: The secret used to configure a GitHub webhook
+    displayName: GitHub Webhook Secret
+    required: true
+    from: '[a-zA-Z0-9]{40}'
+    generate: expression
+objects:
+  - kind: Secret
+    apiVersion: v1
+    metadata:
+      name: mundane-sun-database-bind
+      labels:
+        app: mundane-sun
+    stringData:
+      uri: mundane-sun-database
+      database: my_data
+      user: dbuser
+      password: secret
+  - kind: ImageStreamTag
+    apiVersion: image.openshift.io/v1
+    metadata:
+      name: 'mundane-sun-database:10'
+      creationTimestamp: null
+      labels:
+        app: mundane-sun
+    tag:
+      name: '10'
+      annotations: null
+      from:
+        kind: DockerImage
+        name: 'docker-registry.default.svc:5000/openshift/postgresql:10'
+      generation: null
+      importPolicy: {}
+      referencePolicy:
+        type: ''
+    generation: 0
+    lookupPolicy:
+      local: false
+    image:
+      metadata:
+        creationTimestamp: null
+      dockerImageMetadata: null
+      dockerImageLayers: null
+  - kind: DeploymentConfig
+    apiVersion: apps.openshift.io/v1
+    metadata:
+      name: mundane-sun-database
+      creationTimestamp: null
+      labels:
+        app: mundane-sun
+    spec:
+      strategy:
+        resources: {}
+      triggers:
+        - type: ConfigChange
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - mundane-sun-database
+            from:
+              kind: ImageStreamTag
+              namespace: openshift
+              name: 'postgresql:10'
+      replicas: 1
+      test: false
+      selector:
+        app: placeholder-app-label-d46881878f594a2dadfd963843452aab
+        deploymentconfig: mundane-sun-database
+      template:
+        metadata:
+          creationTimestamp: null
+          labels:
+            app: placeholder-app-label-d46881878f594a2dadfd963843452aab
+            deploymentconfig: mundane-sun-database
+        spec:
+          volumes:
+            - name: mundane-sun-database-volume-1
+              emptyDir: {}
+          containers:
+            - name: mundane-sun-database
+              image: 'docker-registry.default.svc:5000/openshift/postgresql:10'
+              ports:
+                - containerPort: 5432
+                  protocol: TCP
+              resources:
+                limits:
+                  memory: 512Mi
+              volumeMounts:
+                - name: mundane-sun-database-volume-1
+                  mountPath: /var/lib/pgsql/data
+              env:
+                - name: POSTGRESQL_DATABASE
+                  valueFrom:
+                    secretKeyRef:
+                      name: mundane-sun-database-bind
+                      key: database
+                - name: POSTGRESQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: mundane-sun-database-bind
+                      key: user
+                - name: POSTGRESQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mundane-sun-database-bind
+                      key: password
+              livenessProbe:
+                initialDelaySeconds: 120
+                exec:
+                  command:
+                    - /usr/libexec/check-container
+                    - '--live'
+              readinessProbe:
+                initialDelaySeconds: 5
+                exec:
+                  command:
+                    - /usr/libexec/check-container
+    status:
+      latestVersion: 0
+      observedGeneration: 0
+      replicas: 0
+      updatedReplicas: 0
+      availableReplicas: 0
+      unavailableReplicas: 0
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: mundane-sun-database
+      creationTimestamp: null
+      labels:
+        app: mundane-sun
+    spec:
+      ports:
+        - name: 5432-tcp
+          protocol: TCP
+          port: 5432
+          targetPort: 5432
+      selector:
+        app: placeholder-app-label-d46881878f594a2dadfd963843452aab
+        deploymentconfig: mundane-sun-database
+    status:
+      loadBalancer: {}
+  - kind: ImageStream
+    apiVersion: image.openshift.io/v1
+    metadata:
+      name: go-toolset-7-centos7
+      creationTimestamp: null
+      labels:
+        app: mundane-sun
+    spec:
+      lookupPolicy:
+        local: false
+      tags:
+        - name: latest
+          from:
+            kind: DockerImage
+            name: centos/go-toolset-7-centos7
+          generation: null
+          importPolicy: {}
+          referencePolicy:
+            type: ''
+    status:
+      dockerImageRepository: ''
+  - kind: ImageStream
+    apiVersion: image.openshift.io/v1
+    metadata:
+      name: mundane-sun
+      creationTimestamp: null
+      labels:
+        app: mundane-sun
+    spec:
+      lookupPolicy:
+        local: false
+    status:
+      dockerImageRepository: ''
+  - kind: BuildConfig
+    apiVersion: build.openshift.io/v1
+    metadata:
+      name: mundane-sun
+      creationTimestamp: null
+      labels:
+        app: mundane-sun
+    spec:
+      triggers:
+        - type: GitHub
+          github:
+            secret: '${GITHUB_WEBHOOK_SECRET}'
+        - type: ConfigChange
+        - type: ImageChange
+          imageChange: {}
+      source:
+        type: Git
+        git:
+          uri: '${SOURCE_REPOSITORY_URL}'
+      strategy:
+        type: Source
+        sourceStrategy:
+          from:
+            kind: ImageStreamTag
+            name: 'go-toolset-7-centos7:latest'
+          incremental: true
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: mundane-sun-database-bind
+                  key: uri
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mundane-sun-database-bind
+                  key: user
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mundane-sun-database-bind
+                  key: password
+      output:
+        to:
+          kind: ImageStreamTag
+          name: 'mundane-sun:latest'
+      resources: {}
+      postCommit: {}
+      nodeSelector: null
+    status:
+      lastVersion: 0
+  - kind: DeploymentConfig
+    apiVersion: apps.openshift.io/v1
+    metadata:
+      name: mundane-sun
+      creationTimestamp: null
+      labels:
+        app: mundane-sun
+    spec:
+      strategy:
+        resources: {}
+      triggers:
+        - type: ConfigChange
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - mundane-sun
+            from:
+              kind: ImageStreamTag
+              name: 'mundane-sun:latest'
+      replicas: 1
+      test: false
+      selector:
+        app: placeholder-app-label-d46881878f594a2dadfd963843452aab
+        deploymentconfig: mundane-sun
+      template:
+        metadata:
+          creationTimestamp: null
+          labels:
+            app: placeholder-app-label-d46881878f594a2dadfd963843452aab
+            deploymentconfig: mundane-sun
+        spec:
+          containers:
+            - name: mundane-sun
+              image: 'mundane-sun:latest'
+              resources:
+                limits:
+                  memory: 1024Mi
+              env:
+                - name: DB_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: mundane-sun-database-bind
+                      key: uri
+                - name: DB_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: mundane-sun-database-bind
+                      key: user
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: mundane-sun-database-bind
+                      key: password
+              readinessProbe:
+                httpGet:
+                  path: /health
+                  port: 8080
+                  scheme: HTTP
+                initialDelaySeconds: 5
+                timeoutSeconds: 3
+                periodSeconds: 10
+                failureThreshold: 10
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: 8080
+                  scheme: HTTP
+                initialDelaySeconds: 5
+                timeoutSeconds: 3
+    status:
+      latestVersion: 0
+      observedGeneration: 0
+      replicas: 0
+      updatedReplicas: 0
+      availableReplicas: 0
+      unavailableReplicas: 0
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: mundane-sun
+      labels:
+        app: mundane-sun
+    spec:
+      ports:
+        - name: 8080-tcp
+          protocol: TCP
+          port: 8080
+          targetPort: 8080
+      selector:
+        app: mundane-sun
+        deploymentconfig: mundane-sun
+  - apiVersion: v1
+    kind: Route
+    metadata:
+      name: mundane-sun
+      labels:
+        app: mundane-sun
+    spec:
+      port:
+        targetPort: 8080-tcp
+      to:
+        kind: Service
+        name: mundane-sun

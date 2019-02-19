@@ -1,0 +1,65 @@
+{
+  "applications": [
+    {
+      "application": "mundane-sun",
+      "parts": [
+        {
+          "shared": {
+            "runtime": {
+              "name": "go",
+              "version": "community"
+            },
+            "maven": {
+              "version": "1.0.0-SNAPSHOT",
+              "artifactId": "newapp-go",
+              "groupId": "com.yourcompany.newapp"
+            }
+          },
+          "extra": {
+            "category": "backend",
+            "runtimeInfo": {
+              "image": "centos/go-toolset-7-centos7",
+              "service": "mundane-sun",
+              "route": "mundane-sun"
+            }
+          },
+          "capabilities": [
+            {
+              "module": "welcome",
+              "props": {},
+              "extra": {
+                "category": "support"
+              }
+            },
+            {
+              "module": "database",
+              "props": {
+                "databaseType": "postgresql"
+              },
+              "extra": {
+                "category": "backend",
+                "databaseInfo": {
+                  "image": "postgresql",
+                  "service": "mundane-sun-database-bind"
+                },
+                "sourceMapping": {
+                  "dbEndpoint": "crud/crud.go"
+                }
+              }
+            },
+            {
+              "module": "rest",
+              "props": {},
+              "extra": {
+                "category": "backend",
+                "sourceMapping": {
+                  "greetingEndpoint": "rest/greeting.go"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
